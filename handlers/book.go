@@ -2,9 +2,12 @@ package handlers
 
 import (
 	"campus-books/models"
+	"errors"
 	"log"
 	"net/http"
 	"strings"
+
+	"strconv"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -45,4 +48,50 @@ func (h *BookHandler) List(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"books": books,
 	})
+}
+
+// Detail根据教材编号查询教材详情
+func (h *BookHandler) Detail(c *gin.Context) {
+	//获取路径参数，如/api/books/1中的1
+	idText := c.Param("id")
+
+	//将字符串编号转换为int64
+	id, err := strconv.ParseInt(idText, 10, 64)
+	if err != nil || id <= 0 {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"message": "教材编号必须是正整数",
+		})
+		return
+	}
+
+	//创建结构体变量，接收查到的教材
+	var book models.Book
+
+	//只查询指定编号在售的教材
+	result := h.DB.
+		Where("id=? AND status=?", id, "on_sale").
+		First(&book)
+
+	//区分没有找到教材和其他的数据库错误
+	if errors.Is(result.Error, gorm.ErrRecordNotFound) {
+		c.JSON(http.StatusNotFound, gin.H{
+			"message": "教材不存在或已下架",
+		})
+		return
+	}
+
+	if result.Error != nil {
+		log.Printf("查询教材详情失败:&v", result.Error)
+
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"message": "查询教材详情失败，请稍后尝试",
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "查询成功",
+		"data":    book,
+	})
+
 }

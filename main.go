@@ -59,6 +59,7 @@ func main() {
 
 	//注册教材查询接口
 	router.GET("/api/books", bookHandler.List)
+	router.GET("/api/books/:id", bookHandler.Detail)
 
 	if err := router.Run(":8080"); err != nil {
 		log.Fatalf("服务启动失败：%v", err)
