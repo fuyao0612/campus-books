@@ -40,7 +40,7 @@ func main() {
 
 	log.Println("数据库连接成功")
 
-	if err := db.AutoMigrate(&models.Book{}); err != nil {
+	if err := db.AutoMigrate(&models.Book{}, &models.User{}); err != nil {
 		log.Fatalf("教材表初始化失败：%v", err)
 	}
 	log.Println("教材表初始化成功")

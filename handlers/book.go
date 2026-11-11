@@ -46,7 +46,8 @@ func (h *BookHandler) List(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{
-		"books": books,
+		"message": "查询成功",
+		"data":    books,
 	})
 }
 
@@ -81,7 +82,7 @@ func (h *BookHandler) Detail(c *gin.Context) {
 	}
 
 	if result.Error != nil {
-		log.Printf("查询教材详情失败:&v", result.Error)
+		log.Printf("查询教材详情失败:%v", result.Error)
 
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"message": "查询教材详情失败，请稍后尝试",
