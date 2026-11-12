@@ -41,6 +41,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"message": "请填写姓名和学号",
 		})
+		return
 	}
 
 	// 去掉姓名两端空白；密码不做 Trim，避免改变用户输入。
@@ -79,7 +80,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	// 姓名不存在或密码不匹配时，返回相同提示。
 	if matchedUser == nil {
 		c.JSON(http.StatusUnauthorized, gin.H{
-			"message": "姓名或学号错误",
+			"message": "姓名或密码错误",
 		})
 		return
 	}

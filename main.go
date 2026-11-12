@@ -25,6 +25,12 @@ func main() {
 		log.Fatal("请先设置 DB_DSN 环境变量")
 	}
 
+	//从环境变量中读取JWT签名密钥
+	jwtSecret := os.Getenv("JWT_SECRET")
+	if len(jwtSecret) < 32 {
+		log.Fatal("jwt中至少使用32字节的随机密钥")
+	}
+
 	//调用database包的Connect函数连接数据库
 	db, err := database.Connect(dsn)
 	if err != nil {
@@ -57,9 +63,18 @@ func main() {
 	//创建教材处理器，把已经连接好的数据库对象接入
 	bookHandler := &handlers.BookHandler{DB: db}
 
+	//创建登录处理器，提供数据库和JWT签名密钥
+	authHandler := &handlers.AuthHandler{
+		DB:        db,
+		JWTSecret: []byte(jwtSecret),
+	}
+
 	//注册教材查询接口
 	router.GET("/api/books", bookHandler.List)
 	router.GET("/api/books/:id", bookHandler.Detail)
+
+	//注册登录接口
+	router.POST("/api/login", authHandler.Login)
 
 	if err := router.Run(":8080"); err != nil {
 		log.Fatalf("服务启动失败：%v", err)
