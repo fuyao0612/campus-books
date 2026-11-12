@@ -71,6 +71,8 @@ func main() {
 
 	//注册教材查询接口
 	router.GET("/api/books", bookHandler.List)
+	// 发布教材前，先验证登录身份。
+	router.POST("/api/books", authHandler.RequireAuth(), bookHandler.Create)
 	router.GET("/api/books/:id", bookHandler.Detail)
 
 	//注册登录接口

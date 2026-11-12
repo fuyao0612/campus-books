@@ -1,0 +1,11 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>校园书集 · 让知识继续流转</title><meta name="theme-color" content="#245441"><link rel="icon" href="data:,"><link rel="stylesheet" href="/style.css"><script type="module" src="/app.js"></script></head>
+<body>
+<div class="topbar"><div class="wrap topbar-inner"><span>一本书的下一章，也许从你开始。</span><span>校园教材 · 真实接口</span></div></div>
+<header class="site-header"><div class="wrap nav"><a href="#/" class="brand"><span class="brand-icon">书</span><span>校园书集<small>CAMPUS BOOKS</small></span></a><nav aria-label="主导航"><a href="#/" data-nav="home">教材广场</a><a href="#/publish" data-nav="publish">发布教材</a><a href="#/orders" data-nav="orders">我的订单</a></nav><div id="account-nav"></div></div></header>
+<div id="mode-note" class="mode-note wrap">正在连接校园书集服务…</div><main id="app" class="wrap" tabindex="-1"></main>
+<footer class="site-footer"><div class="wrap footer-inner"><a href="#/" class="footer-brand">校园书集<span>让知识继续流转</span></a><p>教材在校园里流转，学习从这里继续。<br><span>校内交流 · 如实描述 · 友善沟通</span></p><a href="#/guide">使用指南 ↗</a></div></footer>
+<dialog id="login-dialog"><form id="login-form"><button type="button" class="close" data-close="login-dialog" aria-label="关闭登录">×</button><span class="overline">WELCOME BACK</span><h2>你好，同学。</h2><p class="muted" id="login-caption"></p><label>姓名<input name="name" autocomplete="username" required maxlength="50" placeholder="请输入姓名"></label><label>密码<input name="password" type="password" autocomplete="current-password" required placeholder="请输入密码"></label><p id="login-error" role="alert" class="error"></p><button class="btn full" type="submit">登录校园书集 →</button><p class="small muted">账号由课程项目初始化工具创建，当前不提供在线注册。</p></form></dialog>
+<dialog id="confirm-dialog"><form method="dialog"><h2 id="confirm-title">确认操作</h2><p id="confirm-message"></p><div class="button-row"><button value="no" class="btn secondary">再想想</button><button value="yes" class="btn">确认</button></div></form></dialog>
+<div id="toast" role="status" aria-live="polite" hidden></div>
+</body></html>
