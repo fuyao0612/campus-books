@@ -76,6 +76,9 @@ func main() {
 	//注册登录接口
 	router.POST("/api/login", authHandler.Login)
 
+	//先验证登录状态，再查询当前用户
+	router.GET("/api/me", authHandler.RequireAuth(), authHandler.Me)
+
 	if err := router.Run(":8080"); err != nil {
 		log.Fatalf("服务启动失败：%v", err)
 	}
