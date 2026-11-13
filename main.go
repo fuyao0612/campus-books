@@ -46,7 +46,11 @@ func main() {
 
 	log.Println("数据库连接成功")
 
-	if err := db.AutoMigrate(&models.Book{}, &models.User{}); err != nil {
+	if err := db.AutoMigrate(
+		&models.Book{},
+		&models.User{},
+		&models.Comment{},
+	); err != nil {
 		log.Fatalf("教材表初始化失败：%v", err)
 	}
 	log.Println("教材表初始化成功")
@@ -63,6 +67,9 @@ func main() {
 	//创建教材处理器，把已经连接好的数据库对象接入
 	bookHandler := &handlers.BookHandler{DB: db}
 
+	//留言处理器
+	commentHandler := &handlers.CommentHandler{DB: db}
+
 	//创建登录处理器，提供数据库和JWT签名密钥
 	authHandler := &handlers.AuthHandler{
 		DB:        db,
@@ -74,6 +81,9 @@ func main() {
 	// 发布教材前，先验证登录身份。
 	router.POST("/api/books", authHandler.RequireAuth(), bookHandler.Create)
 	router.GET("/api/books/:id", bookHandler.Detail)
+
+	//查询指定教材的留言
+	router.GET("/api/books/:id/comments", commentHandler.List)
 
 	//注册登录接口
 	router.POST("/api/login", authHandler.Login)
