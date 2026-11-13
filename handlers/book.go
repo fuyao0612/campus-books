@@ -41,7 +41,12 @@ func (h *BookHandler) List(c *gin.Context) {
 
 	//如果有搜索关键词，则添加模糊查询条件
 	if keyword != "" {
-		query = query.Where("title LIKE ?", "%"+keyword+"%")
+		pattern := "%" + keyword + "%"
+		query = query.Where(
+			"(title LIKE ? OR course LIKE ?)",
+			pattern,
+			pattern,
+		)
 	}
 
 	//执行查询
@@ -106,7 +111,6 @@ func (h *BookHandler) Detail(c *gin.Context) {
 	})
 
 }
-
 
 // Create 发布教材，只有登录用户才能调用。
 func (h *BookHandler) Create(c *gin.Context) {
