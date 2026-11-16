@@ -18,6 +18,17 @@ type BookHandler struct {
 	DB *gorm.DB
 }
 
+// BookResponse 用于返回“教材信息 + 发布人姓名”。
+// 它是查询响应结构，不需要加入 AutoMigrate。
+type BookResponse struct {
+	// 匿名嵌入教材结构体，复用书名、价格、发布人编号等全部教材字段。
+	// embedded 明确告诉 GORM：把内部字段作为当前结构的字段进行映射。
+	models.Book `gorm:"embedded"`
+
+	// 接收查询结果中的 seller_name 列，并以同名 JSON 字段返回。
+	SellerName string `json:"seller_name"`
+}
+
 // CreateBookRequest 表示发布教材时允许前端提交的数据。
 type CreateBookRequest struct {
 	Title       string `json:"title" binding:"required,max=100"`
@@ -26,6 +37,7 @@ type CreateBookRequest struct {
 	Price       int64  `json:"price" binding:"gt=0"`
 	Description string `json:"description" binding:"max=1000"`
 	Contact     string `json:"contact" binding:"required,max=100"`
+	Category    string `json:"category" binding:"omitempty,oneof=计算机 公共课 语言 设计 其他"`
 }
 
 // ChangeBookStatusRequest 接收教材状态修改请求。
@@ -35,38 +47,51 @@ type ChangeBookStatusRequest struct {
 	Status string `json:"status" binding:"required,oneof=off_shelf"`
 }
 
-// List查询在售教材，支持按书名搜索
+// List 查询在售教材及发布人姓名，支持按书名或课程搜索。
 func (h *BookHandler) List(c *gin.Context) {
-	//获取搜索关键词，去掉俩端空白
+	// 读取搜索关键词，去掉两端空白。
 	keyword := strings.TrimSpace(c.Query("keyword"))
 
-	//创建空切片，接收查询结果
-	books := make([]models.Book, 0)
+	// 接收带有发布人姓名的教材列表。
+	// 初始化为空切片，保证没有结果时返回 []。
+	books := make([]BookResponse, 0)
 
-	//从结构体中获取数据库连接对象，构建条件查询
-	query := h.DB.Where("status = ?", "on_sale")
+	// books 是主表，简称 b；users 是用户表，简称 u。
+	// 按教材中的 seller_id，连接对应的用户。
+	query := h.DB.
+		Table("books AS b").
+		Select("b.*, COALESCE(u.name, '') AS seller_name").
+		Joins("LEFT JOIN users AS u ON u.id = b.seller_id").
+		Where("b.status = ?", "on_sale")
 
-	//如果有搜索关键词，则添加模糊查询条件
+	// 有关键词时，再添加书名或课程的匹配条件。
 	if keyword != "" {
+		// 两边的 % 表示关键词前后可以有其他内容。
 		pattern := "%" + keyword + "%"
+
+		// 括号保证“书名或课程匹配”作为一个整体，
+		// 再与前面的“在售”条件通过 AND 连接。
 		query = query.Where(
-			"(title LIKE ? OR course LIKE ?)",
+			"(b.title LIKE ? OR b.course LIKE ?)",
 			pattern,
 			pattern,
 		)
 	}
 
-	//执行查询
-	result := query.Order("id DESC").Find(&books)
+	// 按教材编号降序执行查询。
+	// Scan 将教材列和 seller_name 填入 BookResponse 切片。
+	result := query.Order("b.id DESC").Scan(&books)
 
+	// 数据库出错时，记录具体错误并返回 500。
 	if result.Error != nil {
 		log.Printf("查询教材失败：%v", result.Error)
-
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"message": "查询教材失败，请稍后重试",
 		})
 		return
 	}
+
+	// 查询成功，返回教材列表及每本教材的发布人姓名。
 	c.JSON(http.StatusOK, gin.H{
 		"message": "查询成功",
 		"data":    books,
@@ -87,13 +112,16 @@ func (h *BookHandler) Detail(c *gin.Context) {
 		return
 	}
 
-	//创建结构体变量，接收查到的教材
-	var book models.Book
+	// 使用响应结构接收教材字段和额外查询出的发布人姓名。
+	var book BookResponse
 
-	//只查询指定编号在售的教材
+	// 按教材编号查询在售教材，同时读取发布人的姓名。
 	result := h.DB.
-		Where("id=? AND status=?", id, "on_sale").
-		First(&book)
+		Table("books AS b").
+		Select("b.*, COALESCE(u.name, '') AS seller_name").
+		Joins("LEFT JOIN users AS u ON u.id = b.seller_id").
+		Where("b.id = ? AND b.status = ?", id, "on_sale").
+		Take(&book)
 
 	//区分没有找到教材和其他的数据库错误
 	if errors.Is(result.Error, gorm.ErrRecordNotFound) {
@@ -154,6 +182,11 @@ func (h *BookHandler) Create(c *gin.Context) {
 	request.Condition = strings.TrimSpace(request.Condition)
 	request.Description = strings.TrimSpace(request.Description)
 	request.Contact = strings.TrimSpace(request.Contact)
+	request.Contact = strings.TrimSpace(request.Contact)
+	// 未提交分类时统一归为“其他”，避免编辑时保存空分类。
+	if request.Category == "" {
+		request.Category = "其他"
+	}
 
 	// required 无法阻止只填写空格，因此清理后再次检查。
 	if request.Title == "" ||
@@ -170,6 +203,7 @@ func (h *BookHandler) Create(c *gin.Context) {
 	book := models.Book{
 		Title:       request.Title,
 		Course:      request.Course,
+		Category:    request.Category,
 		Condition:   request.Condition,
 		Price:       request.Price,
 		Description: request.Description,
@@ -331,6 +365,12 @@ func (h *BookHandler) Update(c *gin.Context) {
 	request.Condition = strings.TrimSpace(request.Condition)
 	request.Description = strings.TrimSpace(request.Description)
 	request.Contact = strings.TrimSpace(request.Contact)
+	request.Contact = strings.TrimSpace(request.Contact)
+
+	// 未提交分类时统一归为“其他”，避免编辑时保存空分类。
+	if request.Category == "" {
+		request.Category = "其他"
+	}
 
 	// required 无法排除纯空格文本，因此清理后再次检查必填项。
 	if request.Title == "" ||
@@ -348,6 +388,7 @@ func (h *BookHandler) Update(c *gin.Context) {
 	updates := map[string]interface{}{
 		"title":       request.Title,
 		"course":      request.Course,
+		"category":    request.Category,
 		"condition":   request.Condition,
 		"price":       request.Price,
 		"description": request.Description,

@@ -13,6 +13,10 @@ type Book struct {
 	//教材适用课程，类型为支持中文的字符串类型
 	Course string `gorm:"type:nvarchar(100);not null" json:"course"`
 
+	// 教材分类；使用支持中文的数据库类型。
+	// default 为已有教材及未指定分类的数据库插入提供默认值。
+	Category string `gorm:"type:nvarchar(20);not null;default:其他" json:"category"`
+
 	//教材成色
 	Condition string `gorm:"type:nvarchar(50);not null" json:"condition"`
 
