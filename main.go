@@ -83,6 +83,13 @@ func main() {
 	// 当前用户：先验证 JWT，再根据令牌中的用户编号查询用户信息。
 	router.GET("/api/me", authHandler.RequireAuth(), authHandler.Me)
 
+	//查询本人发布的教材，先验证JWT，再按编号查询
+	router.GET(
+		"/api/me/books",
+		authHandler.RequireAuth(),
+		bookHandler.Mine,
+	)
+
 	// 教材查询：无需登录；列表支持关键词搜索，详情通过路径参数 id 指定教材。
 	router.GET("/api/books", bookHandler.List)
 	router.GET("/api/books/:id", bookHandler.Detail)
