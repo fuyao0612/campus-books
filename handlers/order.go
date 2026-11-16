@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
-	"time"
 
 	"campus-books/models"
 
@@ -50,11 +49,6 @@ func (h *OrderHandler) queryWithNames() *gorm.DB {
 var (
 	errBookUnavailable = errors.New("教材当前不可购买")
 	errBuyOwnBook      = errors.New("不能购买自己发布的教材")
-	// 订单不再是待支付状态，或者处理过程中状态发生变化。
-	errOrderConflict = errors.New("订单状态不允许取消")
-
-	// 教材状态与订单预期不一致，不能直接释放教材。
-	errOrderBookConflict = errors.New("订单关联的教材状态异常")
 )
 
 // Create 占用教材，并创建一笔待支付订单。
@@ -309,143 +303,5 @@ func (h *OrderHandler) Detail(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"message": "查询成功",
 		"data":    order,
-	})
-}
-
-// Cancel 取消当前买家的待支付订单，并释放教材。
-func (h *OrderHandler) Cancel(c *gin.Context) {
-	// 读取认证中间件保存的用户编号。
-	value, exists := c.Get("user_id")
-	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{"message": "请先登录"})
-		return
-	}
-
-	// 确认编号类型正确且大于零。
-	userID, ok := value.(int64)
-	if !ok || userID <= 0 {
-		c.JSON(http.StatusUnauthorized, gin.H{
-			"message": "登录信息无效，请重新登录",
-		})
-		return
-	}
-
-	// 路径中的 id 是订单编号，不是教材编号。
-	orderID, err := strconv.ParseInt(c.Param("id"), 10, 64)
-	if err != nil || orderID <= 0 {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"message": "订单编号必须是正整数",
-		})
-		return
-	}
-
-	// 两次状态更新放入同一个事务，任何一步失败都会回滚。
-	err = h.DB.Transaction(func(tx *gorm.DB) error {
-		// 只查当前用户作为买家的订单。
-		// 卖家或无关用户不能通过这个条件取得订单。
-		var order models.Order
-		if err := tx.
-			Where("id = ? AND buyer_id = ?", orderID, userID).
-			First(&order).Error; err != nil {
-			return err
-		}
-
-		// 已经取消的订单直接成功，不再操作教材。
-		// 避免旧订单的重复取消影响教材后来的交易。
-		if order.Status == models.OrderStatusCancelled {
-			return nil
-		}
-
-		// 已支付或已完成的订单，不允许通过取消接口处理。
-		if order.Status != models.OrderStatusPending {
-			return errOrderConflict
-		}
-
-		// 先更新教材，再更新订单，保持后续交易操作的加锁顺序一致。
-		// 只有教材仍属于原卖家且处于 reserved 状态时，才能释放。
-		bookResult := tx.Model(&models.Book{}).
-			Where(
-				"id = ? AND seller_id = ? AND status = ?",
-				order.BookID,
-				order.SellerID,
-				"reserved",
-			).
-			Update("status", "on_sale")
-
-		// SQL 执行失败时回滚。
-		if bookResult.Error != nil {
-			return bookResult.Error
-		}
-
-		// 没有匹配教材时，不能继续把订单标记为已取消。
-		if bookResult.RowsAffected == 0 {
-			return errOrderBookConflict
-		}
-
-		// 取得取消时间。
-		now := time.Now()
-
-		// 更新时再次检查订单仍为待支付，并且买家没有变化。
-		// 不能只相信前面查询时看到的旧状态。
-		orderResult := tx.Model(&models.Order{}).
-			Where(
-				"id = ? AND buyer_id = ? AND status = ?",
-				orderID,
-				userID,
-				models.OrderStatusPending,
-			).
-			Updates(map[string]interface{}{
-				"status":       models.OrderStatusCancelled,
-				"cancelled_at": now,
-			})
-
-		// 更新失败时，前面释放教材的操作也会回滚。
-		if orderResult.Error != nil {
-			return orderResult.Error
-		}
-
-		// 状态已被其他请求改变，也必须回滚，不能留下错误释放的教材。
-		if orderResult.RowsAffected == 0 {
-			return errOrderConflict
-		}
-
-		// 两项操作均成功，提交事务。
-		return nil
-	})
-
-	// 事务结束后，根据错误决定 HTTP 响应。
-	if err != nil {
-		// 订单不存在，或当前用户不是买家。
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			c.JSON(http.StatusNotFound, gin.H{
-				"message": "订单不存在或无权取消",
-			})
-			return
-		}
-
-		// 业务状态不符合要求，返回 409。
-		if errors.Is(err, errOrderConflict) ||
-			errors.Is(err, errOrderBookConflict) {
-			c.JSON(http.StatusConflict, gin.H{
-				"message": "订单或教材状态已变化，请刷新后重试",
-			})
-			return
-		}
-
-		// 其他数据库错误记录到后端日志。
-		log.Printf("取消订单失败：%v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"message": "取消订单失败，请稍后重试",
-		})
-		return
-	}
-
-	// 只有事务成功，或订单原本已经取消，才返回成功。
-	c.JSON(http.StatusOK, gin.H{
-		"message": "订单已取消",
-		"data": gin.H{
-			"id":     orderID,
-			"status": models.OrderStatusCancelled,
-		},
 	})
 }

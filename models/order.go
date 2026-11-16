@@ -46,6 +46,13 @@ type Order struct {
 	// 订单状态，由后端业务逻辑控制。
 	Status string `gorm:"type:nvarchar(20);not null;index" json:"status"`
 
+	// 第一次发出付款链接的时间；为空表示从未开放过平台支付。
+	// 一旦写入就不清空，取消订单时据此判断是否必须关闭支付宝交易。
+	PaymentStartedAt *time.Time `json:"payment_started_at"`
+
+	// 所有重复支付链接共用同一个绝对截止时间，避免重试延长支付窗口。
+	PaymentExpiresAt *time.Time `json:"payment_expires_at"`
+
 	// 付款确认时间，使用指针表示“可能还没有时间”。
 	// 未付款时为 nil，数据库保存 NULL，JSON 返回 null。
 	PaidAt *time.Time `json:"paid_at"`

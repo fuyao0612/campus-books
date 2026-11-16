@@ -32,7 +32,7 @@ const server = http.createServer(async (req, res) => {
       res.writeHead(502, { 'Content-Type': 'application/json; charset=utf-8' });
       res.end(JSON.stringify({ message: '无法连接 Go 后端，请先在项目根目录运行 go run .' }));
     });
-    proxy.setTimeout(15000, () => proxy.destroy());
+    proxy.setTimeout(30000, () => proxy.destroy());
     req.on('aborted', () => proxy.destroy());
     res.on('close', () => { if (!res.writableEnded) proxy.destroy(); });
     req.pipe(proxy);

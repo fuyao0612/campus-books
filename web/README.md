@@ -2,7 +2,7 @@
 
 前端使用原生 HTML、CSS、JavaScript 和 Node.js 本地静态服务，无需 npm 安装或打包。保持绿色、纸张和书籍的既有视觉风格，适配桌面和手机。
 
-2026-11-16 已完成计划中的主要页面与交互。业务数据始终来自 Go API，页面中没有假账号、固定库存或模拟支付。订单、支付和删除留言的后端尚待实现；对应操作失败时会显示可读提示，不会伪造成功。
+2026-11-16 已完成计划中的主要页面与交互。业务数据始终来自 Go API，页面中没有假账号、固定库存或模拟支付。订单、支付和删除留言的后端现已接入；付款结果由后端核验，前端不会伪造成功。支付接入规则见 ../payments/README.md。
 
 ## 启动
 
@@ -55,7 +55,7 @@ node web/server.mjs
 | GET | `/api/books?keyword=` | 在售教材数组，关键词匹配书名或课程 |
 | GET | `/api/books/:id` | 当前仅返回在售教材 |
 | POST | `/api/books` | 发布，需要登录；价格为整数分 |
-| GET | `/api/me/books?status=` | 本人教材，状态可省略或为 on_sale/off_shelf/sold |
+| GET | `/api/me/books?status=` | 本人教材，状态可省略或为 on_sale/reserved/off_shelf/sold |
 | PUT | `/api/books/:id` | 编辑本人在售教材，返回至少 `{id}` |
 | PATCH | `/api/books/:id/status` | `{status:"off_shelf"}`；本人下架 |
 | GET | `/api/books/:id/comments` | 教材留言，含姓名，教材下架后仍可查询 |
@@ -63,9 +63,9 @@ node web/server.mjs
 
 成功响应以 `{message,data}` 包装，失败响应以 `{message}` 说明。未实现路由返回的文本 404 也有友好提示。任何新增接口仍须在后端验证身份、归属与业务状态。
 
-## 待实现的后端接口约定
+## 订单、支付和删除接口
 
-以下均已接好前端调用，但不表示后端已经完成。
+以下接口均已实现并接好前端调用，仍需真实沙箱完整联调验收。
 
 | 方法 | 路径 | 请求与响应约定 |
 | --- | --- | --- |
@@ -76,16 +76,17 @@ node web/server.mjs
 | POST | `/api/orders/:id/cancel` | `{}`；仅买家取消待支付订单 |
 | POST | `/api/orders/:id/complete` | `{}`；仅买家确认已支付订单 |
 | POST | `/api/orders/:id/pay` | `{}`；仅买家发起待支付订单付款，返回 `{payment_url}` |
+| POST | `/api/orders/:id/sync` | `{}`；交易双方主动查询支付宝并同步订单，付款返回页及刷新按钮调用 |
 
 订单对象约定：`id,number,book_id,title,price,buyer_id,seller_id,status,created_at`；补充 `seller_name,buyer_name,contact,paid_at` 可以完整展示交易信息。`price` 是订单快照金额，单位为分；不应随教材后续编辑改变。状态为 `pending,paid,completed,cancelled`。
 
-支付地址应由服务端创建，前端仅接受 HTTP(S) URL。付款返回地址建议为 `/payment.html?id=订单编号&return=1`。即使 URL 中包含 success 等参数，前端也不会据此更新订单。只有服务端核验支付结果后，订单接口返回 paid/completed，页面才展示付款已确认。支付渠道、回调地址及并发交易规则将在后端教学中实现。
+支付地址应由服务端创建，前端仅接受 HTTP(S) URL。付款返回地址建议为 `/payment.html?id=订单编号&return=1`。即使 URL 中包含 success 等参数，前端也不会据此更新订单。只有服务端核验支付结果后，订单接口返回 paid/completed，页面才展示付款已确认。当前已接支付宝沙箱，使用固定15分钟付款窗口、平台关单、回调核验与事务入账。超时或状态不明时保留教材占用。
 
 ## 数据兼容说明
 
 - 教材沿用现有字段 `id,title,course,condition,price,description,contact,seller_id,status,created_at,updated_at`。
-- 预留 `seller_name` 展示姓名；当前后端没有返回时显示“校园同学 #编号”，不会伪造姓名。
-- 发布/编辑表单提交 `category`，当前 Go 模型尚未持久化它。缺失时页面按书名和课程推断，不能保证人工选择的分类被保存；后端需补字段。
+- 教材列表和详情已返回 `seller_name`；用户记录缺失时显示编号，不伪造姓名。
+- `category` 已持久化，前后端支持计算机、公共课、语言、设计、其他。
 - 留言列表返回 `id,book_id,user_id,name,content,created_at`；发布响应可直接使用现有 Comment 模型，成功后前端重新查询姓名。
 - 价格输入先拆分元与小数，再转换整数分，避免浮点乘法误差。
 - 列表分页、分类/成色筛选和排序目前在浏览器完成；数据库分页尚待后端设计。
@@ -106,3 +107,7 @@ node web/server.mjs
 使用真实浏览器加载真实前端，浏览器内隔离的 API 响应用于检查：登录失败/成功、密码显隐、分页和课程搜索、留言转义/发布/删除、编辑金额与清空描述、下架和历史留言、订单创建与支付返回、取消与确认收货、未实现接口的文本404提示、保存失败保留输入、手机布局以及退出登录。
 
 这些验证建立的是前端在给定接口响应下的行为；没有写入项目数据库，也没有证明真实支付、订单事务或越权校验已经由后端实现。仍需与现有 Go 服务和后续订单/支付接口实际联调。
+
+## 支付接口完成后的验证
+
+付款返回页主动调用 sync，刷新按钮也主动查单；订单为 paid 时可确认收货，取消时遇到平台状态不明会保留占用并提示重试。真实支付宝沙箱只读查单已通过，完整付款及回调链路仍需使用沙箱买家账号验收。

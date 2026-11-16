@@ -10,6 +10,10 @@ import (
 	"campus-books/database"
 	"campus-books/handlers"
 
+	"campus-books/config"
+
+	"campus-books/payments"
+
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
 )
@@ -18,6 +22,29 @@ func main() {
 	if err := godotenv.Load(); err != nil {
 		log.Println("未找到 .env 文件")
 	}
+
+	// 读取支付配置。
+	alipayConfig, err := config.LoadAlipay()
+	if err != nil {
+		// 配置加载失败时停止启动，避免带错误配置继续运行。
+		log.Fatalf("支付宝配置加载失败：%v", err)
+	}
+
+	// 只输出非敏感的环境状态，绝不要打印整个配置对象。
+	log.Printf("支付宝配置加载完成，沙箱模式：%t", alipayConfig.Sandbox)
+
+	// 根据配置创建客户端，并解析应用私钥和支付宝公钥。
+	alipayClient, err := payments.NewAlipay(alipayConfig)
+	if err != nil {
+		// 初始化失败时停止启动，避免带着无效密钥继续运行。
+		log.Fatalf("支付宝客户端初始化失败：%v", err)
+	}
+
+	// 仅记录环境状态，客户端随后交给支付服务，避免输出密钥。
+	log.Printf(
+		"支付宝客户端初始化完成，正式环境：%t",
+		alipayClient.Production(),
+	)
 
 	// 从环境变量读取数据库连接字符串
 	dsn := os.Getenv("DB_DSN")
@@ -51,10 +78,11 @@ func main() {
 		&models.User{},
 		&models.Comment{},
 		&models.Order{},
+		&models.Payment{},
 	); err != nil {
-		log.Fatalf("教材表初始化失败：%v", err)
+		log.Fatalf("数据表初始化失败：%v", err)
 	}
-	log.Println("教材表初始化成功")
+	log.Println("数据表初始化成功")
 
 	// 创建 Gin 路由对象，默认启用请求日志和 panic 恢复中间件。
 	router := gin.Default()
@@ -73,6 +101,21 @@ func main() {
 
 	// 创建订单处理器，后续下单和订单查询都使用同一个数据库对象。
 	orderHandler := &handlers.OrderHandler{DB: db}
+
+	// 所有支付状态变更复用一个服务；真实 SDK 负责签名和验签。
+	paymentService := &payments.Service{
+		DB:      db,
+		Gateway: payments.SDKGateway{Client: alipayClient},
+		Config:  alipayConfig,
+	}
+
+	// 支付处理器复用启动时创建的数据库、支付宝客户端和配置。
+	paymentHandler := &handlers.PaymentHandler{
+		DB:      db,
+		Client:  alipayClient,
+		Config:  alipayConfig,
+		Service: paymentService,
+	}
 
 	// 服务检查：无需登录，只返回服务运行提示，不实时检查数据库连接。
 	router.GET("/api/health", func(c *gin.Context) {
@@ -161,7 +204,18 @@ func main() {
 	router.POST(
 		"/api/orders/:id/cancel",
 		authHandler.RequireAuth(),
-		orderHandler.Cancel,
+		paymentHandler.Cancel,
+	)
+
+	// 付款、主动查单和确认收货均要求登录，并由服务进一步校验归属。
+	router.POST("/api/orders/:id/pay", authHandler.RequireAuth(), paymentHandler.Pay)
+	router.POST("/api/orders/:id/sync", authHandler.RequireAuth(), paymentHandler.Sync)
+	router.POST("/api/orders/:id/complete", authHandler.RequireAuth(), paymentHandler.Complete)
+
+	// 支付宝通知不使用用户 JWT，由 Notify 内部验证平台签名。
+	router.POST(
+		"/api/payments/alipay/notify",
+		paymentHandler.Notify,
 	)
 
 	// 完成处理器初始化和路由登记后，监听 8080 端口并开始接收 HTTP 请求。

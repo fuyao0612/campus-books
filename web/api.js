@@ -34,7 +34,7 @@ export async function request(path, { method = 'GET', body, query, auth = true }
 
   // 超时覆盖读取响应体的过程；finally 保证成功或失败都会清理计时器。
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 15000);
+  const timeout = setTimeout(() => controller.abort(), 30000);
   let response;
   let payload;
   try {
@@ -94,5 +94,6 @@ export const api = {
   getOrder(id) { return request(`/orders/${encodeURIComponent(id)}`); },
   cancel(id) { return request(`/orders/${encodeURIComponent(id)}/cancel`, { method: 'POST', body: {} }); },
   pay(id) { return request(`/orders/${encodeURIComponent(id)}/pay`, { method: 'POST', body: {} }); },
+  sync(id) { return request(`/orders/${encodeURIComponent(id)}/sync`, { method: 'POST', body: {} }); },
   complete(id) { return request(`/orders/${encodeURIComponent(id)}/complete`, { method: 'POST', body: {} }); },
 };

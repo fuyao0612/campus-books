@@ -190,6 +190,11 @@ async function orders() {
 async function orderDetail(payment = false) {
   const id = requireID();
   let order;
+  let syncError = '';
+  // 付款返回时主动向平台查单，仍以服务端核验结果为准。
+  if (payment && params.get('return') === '1') {
+    try { await api.sync(id); } catch (error) { syncError = error.message; }
+  }
   try { order = await api.getOrder(id); } catch (error) {
     return heading(payment ? '订单支付' : '订单详情', '核对教材与订单信息。') + errorBox(error, '订单暂时无法加载');
   }
@@ -202,7 +207,7 @@ async function orderDetail(payment = false) {
     : paid ? '付款已确认，请联系卖家完成校内交接。'
     : order.status === 'cancelled' ? '订单已取消，无需继续付款。'
     : returning ? '尚未收到付款确认。请稍后刷新，避免重复付款。' : '请核对教材与金额，再前往支付。';
-  return `<div class="payment-layout"><div class="breadcrumb"><a href="${link('orders')}">我的订单</a> / ${payment ? '订单支付' : '订单详情'}</div>${heading(payment ? '确认订单，继续学习。' : '每次交接，都有记录。', message)}<section class="panel"><div class="section-heading"><h2>订单 ${esc(order.number || order.id)}</h2>${status(order.status)}</div><ol class="order-steps"><li class="done">提交订单</li><li class="${paid ? 'done' : ''}">付款确认</li><li class="${order.status === 'completed' ? 'done' : ''}">完成交接</li></ol><div class="management-row">${cover(order, 'mini-cover')}<div class="management-main"><h2 class="item-title">${esc(order.title || '教材订单')}</h2><p>卖家：${esc(order.seller_name || `校园同学 #${order.seller_id}`)}</p><p>买家：${esc(order.buyer_name || `校园同学 #${order.buyer_id}`)}</p></div></div><dl class="order-info"><dt>下单时间</dt><dd>${date(order.created_at)}</dd><dt>付款时间</dt><dd>${date(order.paid_at)}</dd><dt>交接联系</dt><dd>${esc(order.contact || '暂无联系方式')}</dd></dl><div class="payment-summary"><span>订单金额</span>${price(order.price)}</div>${payment && order.status === 'pending' ? `<p class="notice-box">${returning ? '付款确认可能稍有延迟，请先刷新状态。' : '付款后请返回此页确认结果。'}请勿向个人提供银行卡密码或验证码。</p><div class="button-row"><button class="btn" data-action="${returning ? 'retry' : 'pay'}" data-id="${esc(order.id)}">${returning ? '我已付款，刷新状态' : '前往支付 ¥' + money(order.price)}</button>${returning ? `<button class="text-link" data-action="pay" data-id="${esc(order.id)}">重新前往支付</button>` : ''}<a class="btn secondary" href="${link('orders')}">稍后处理</a></div>` : `<div class="button-row">${orderActions(order, isBuyer)}<button class="btn secondary" data-action="retry">刷新状态</button></div>`}<p id="action-error" class="error" role="alert"></p></section><p class="small muted">交易金额以订单记录为准。付款完成后，请当面检查教材再确认收货。</p></div>`;
+  return `<div class="payment-layout"><div class="breadcrumb"><a href="${link('orders')}">我的订单</a> / ${payment ? '订单支付' : '订单详情'}</div>${heading(payment ? '确认订单，继续学习。' : '每次交接，都有记录。', message)}<section class="panel"><div class="section-heading"><h2>订单 ${esc(order.number || order.id)}</h2>${status(order.status)}</div><ol class="order-steps"><li class="done">提交订单</li><li class="${paid ? 'done' : ''}">付款确认</li><li class="${order.status === 'completed' ? 'done' : ''}">完成交接</li></ol><div class="management-row">${cover(order, 'mini-cover')}<div class="management-main"><h2 class="item-title">${esc(order.title || '教材订单')}</h2><p>卖家：${esc(order.seller_name || `校园同学 #${order.seller_id}`)}</p><p>买家：${esc(order.buyer_name || `校园同学 #${order.buyer_id}`)}</p></div></div><dl class="order-info"><dt>下单时间</dt><dd>${date(order.created_at)}</dd><dt>付款时间</dt><dd>${date(order.paid_at)}</dd><dt>交接联系</dt><dd>${esc(order.contact || '暂无联系方式')}</dd></dl><div class="payment-summary"><span>订单金额</span>${price(order.price)}</div>${payment && order.status === 'pending' ? `<p class="notice-box">${returning ? '付款确认可能稍有延迟，请先刷新状态。' : '付款后请返回此页确认结果。'}请勿向个人提供银行卡密码或验证码。</p><div class="button-row"><button class="btn" data-action="${returning ? 'sync-order' : 'pay'}" data-id="${esc(order.id)}">${returning ? '我已付款，刷新状态' : '前往支付 ¥' + money(order.price)}</button>${returning ? `<button class="text-link" data-action="pay" data-id="${esc(order.id)}">重新前往支付</button>` : ''}<a class="btn secondary" href="${link('orders')}">稍后处理</a></div>` : `<div class="button-row">${orderActions(order, isBuyer)}<button class="btn secondary" data-action="sync-order" data-id="${esc(order.id)}">刷新状态</button></div>`}<p id="action-error" class="error" role="alert">${esc(syncError)}</p></section><p class="small muted">交易金额以订单记录为准。付款完成后，请当面检查教材再确认收货。</p></div>`;
 }
 async function profile() {
   const user = await api.me();
@@ -304,6 +309,7 @@ document.addEventListener('click', event => {
       if (!await confirmAction('确认收到教材？', '请在当面检查教材、完成交接后确认。')) return;
       await api.complete(id); await render(); notify('交易已完成，祝学习顺利。');
     }
+    if (action === 'sync-order') { await api.sync(id); await render(); notify('订单状态已刷新。'); }
     if (action === 'pay') {
       const result = await api.pay(id);
       const value = result?.payment_url || result?.checkout_url;
