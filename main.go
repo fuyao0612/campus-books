@@ -108,6 +108,13 @@ func main() {
 		bookHandler.Update,
 	)
 
+	// 下架教材：先验证身份，再检查教材归属和状态，保留原始记录。
+	router.PATCH(
+		"/api/books/:id/status",
+		authHandler.RequireAuth(),
+		bookHandler.ChangeStatus,
+	)
+
 	// 留言查询：无需登录，按路径参数 id 查询指定教材的留言。
 	router.GET("/api/books/:id/comments", commentHandler.List)
 

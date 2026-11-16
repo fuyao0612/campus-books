@@ -28,6 +28,13 @@ type CreateBookRequest struct {
 	Contact     string `json:"contact" binding:"required,max=100"`
 }
 
+// ChangeBookStatusRequest 接收教材状态修改请求。
+// 当前只开放下架，不允许通过这个接口直接设置已售出或重新上架。
+type ChangeBookStatusRequest struct {
+	// required 要求状态非空；oneof 表示只接受列出的值。
+	Status string `json:"status" binding:"required,oneof=off_shelf"`
+}
+
 // List查询在售教材，支持按书名搜索
 func (h *BookHandler) List(c *gin.Context) {
 	//获取搜索关键词，去掉俩端空白
@@ -243,8 +250,8 @@ func (h *BookHandler) Mine(c *gin.Context) {
 	})
 }
 
-//修改当前用户发布的在售教材
-func (h *BookHandler)Update(c *gin.Context){
+// 修改当前用户发布的在售教材
+func (h *BookHandler) Update(c *gin.Context) {
 	// 从认证中间件保存的上下文中读取用户编号。
 	value, exists := c.Get("user_id")
 	if !exists {
@@ -381,6 +388,132 @@ func (h *BookHandler)Update(c *gin.Context){
 		"message": "修改成功",
 		"data": gin.H{
 			"id": bookID,
+		},
+	})
+}
+
+// ChangeStatus 将当前用户发布的在售教材下架。
+// 教材记录继续保留，只修改状态。
+func (h *BookHandler) ChangeStatus(c *gin.Context) {
+	// 从本次请求上下文中取得认证中间件保存的用户编号。
+	value, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"message": "请先登录",
+		})
+		return
+	}
+
+	// 类型断言：编号必须是 int64，且必须大于零。
+	userID, ok := value.(int64)
+	if !ok || userID <= 0 {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"message": "登录信息无效，请重新登录",
+		})
+		return
+	}
+
+	// 读取路径中的教材编号，并转换为整数。
+	bookID, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil || bookID <= 0 {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"message": "教材编号必须是正整数",
+		})
+		return
+	}
+
+	// 解析请求体，同时执行 required 和 oneof 校验。
+	var request ChangeBookStatusRequest
+	if err := c.ShouldBindJSON(&request); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"message": "当前只允许将状态设置为 off_shelf",
+		})
+		return
+	}
+
+	// 查询教材，准备检查它是否存在、属于谁以及当前状态。
+	var book models.Book
+	result := h.DB.First(&book, bookID)
+
+	// 没有找到教材时返回 404。
+	if errors.Is(result.Error, gorm.ErrRecordNotFound) {
+		c.JSON(http.StatusNotFound, gin.H{
+			"message": "教材不存在",
+		})
+		return
+	}
+
+	// 数据库查询失败时记录详细错误，向客户端返回 500。
+	if result.Error != nil {
+		log.Printf("查询待下架教材失败：%v", result.Error)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"message": "下架教材失败，请稍后重试",
+		})
+		return
+	}
+
+	// 先检查归属，禁止用户操作他人的教材。
+	if book.SellerID != userID {
+		c.JSON(http.StatusForbidden, gin.H{
+			"message": "不能下架其他用户发布的教材",
+		})
+		return
+	}
+
+	// 已经下架时直接返回成功，不必重复更新数据库。
+	if book.Status == "off_shelf" {
+		c.JSON(http.StatusOK, gin.H{
+			"message": "教材已下架",
+			"data": gin.H{
+				"id":     bookID,
+				"status": "off_shelf",
+			},
+		})
+		return
+	}
+
+	// 已售出或其他非在售状态不允许执行下架。
+	if book.Status != "on_sale" {
+		c.JSON(http.StatusConflict, gin.H{
+			"message": "只能下架在售教材",
+		})
+		return
+	}
+
+	// 执行更新时再次限制编号、发布人和当前状态。
+	// Update 只修改指定字段，并由 GORM 自动维护 UpdatedAt。
+	result = h.DB.Model(&models.Book{}).
+		Where(
+			"id = ? AND seller_id = ? AND status = ?",
+			bookID,
+			userID,
+			"on_sale",
+		).
+		Update("status", request.Status)
+
+	// 更新执行失败，返回 500。
+	if result.Error != nil {
+		log.Printf("下架教材失败：%v", result.Error)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"message": "下架教材失败，请稍后重试",
+		})
+		return
+	}
+
+	// 查询和更新之间教材状态可能变化；零行更新说明条件已不满足。
+	if result.RowsAffected == 0 {
+		c.JSON(http.StatusConflict, gin.H{
+			"message": "教材状态已变化，请刷新后重试",
+		})
+		return
+	}
+
+	// 更新成功，返回教材编号和新的状态。
+	c.JSON(http.StatusOK, gin.H{
+		"message": "下架成功",
+		"data": gin.H{
+			"id":     bookID,
+			"status": request.Status,
 		},
 	})
 }

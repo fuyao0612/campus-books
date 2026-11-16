@@ -49,14 +49,12 @@ func (h *CommentHandler) List(c *gin.Context) {
 
 	//在数据库中查询这本书
 	var book models.Book
-	result := h.DB.
-		Where("id=? AND status=?", bookID, "on_sale").
-		First(&book)
+	result := h.DB.First(&book, bookID)
 	//判断不存在或者已下架
 	if errors.Is(result.Error, gorm.ErrRecordNotFound) {
 		//返回404
 		c.JSON(http.StatusNotFound, gin.H{
-			"message": "教材不存在或已下架",
+			"message": "教材不存在",
 		})
 		return
 	}
