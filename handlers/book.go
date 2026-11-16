@@ -187,3 +187,58 @@ func (h *BookHandler) Create(c *gin.Context) {
 		"data":    book,
 	})
 }
+
+// 查询当前登录用户发布的教材
+func (h *BookHandler) Mine(c *gin.Context) {
+	// 从认证中间件保存的上下文中读取用户编号。
+	value, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"message": "请先登录",
+		})
+		return
+	}
+
+	// 确认用户编号类型正确且大于零。
+	userID, ok := value.(int64)
+	if !ok || userID <= 0 {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"message": "登录信息无效，请重新登录",
+		})
+		return
+	}
+
+	//读取查询参数
+	status := strings.TrimSpace(c.Query("status"))
+	if status != "" &&
+		status != "on_sale" &&
+		status != "off_shelf" &&
+		status != "sold" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"message": "教材状态只能为 on_sale、off_shelf 或 sold",
+		})
+		return
+	}
+
+	books := make([]models.Book, 0)
+
+	query := h.DB.Where("seller_id=?", userID)
+
+	if status != "" {
+		query = query.Where("status=?", status)
+	}
+
+	result := query.Order("id DESC").Find(&books)
+	if result.Error != nil {
+		log.Printf("查询本人教材失败：%v", result.Error)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"message": "查询本人教材失败，请稍后重试",
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "查询成功",
+		"data":    books,
+	})
+}
