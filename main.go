@@ -50,6 +50,7 @@ func main() {
 		&models.Book{},
 		&models.User{},
 		&models.Comment{},
+		&models.Order{},
 	); err != nil {
 		log.Fatalf("教材表初始化失败：%v", err)
 	}
