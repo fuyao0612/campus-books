@@ -6,12 +6,15 @@ import { fileURLToPath } from 'node:url';
 
 const port = Number(process.env.WEB_PORT || 5174);
 const backend = new URL('http://127.0.0.1:8080');
+// 每个业务页有独立 HTML 地址，共享样式和 app.js，直接刷新也能访问。
+const pages = ['index', 'login', 'detail', 'publish', 'edit', 'mine', 'orders', 'order', 'payment', 'profile', 'guide', 'comments'];
 const files = new Map([
   ['/', ['index.html', 'text/html; charset=utf-8']],
   ['/index.html', ['index.html', 'text/html; charset=utf-8']],
   ['/app.js', ['app.js', 'text/javascript; charset=utf-8']],
   ['/api.js', ['api.js', 'text/javascript; charset=utf-8']],
   ['/style.css', ['style.css', 'text/css; charset=utf-8']],
+  ...pages.map(page => [`/${page}.html`, [`${page}.html`, 'text/html; charset=utf-8']]),
 ]);
 
 const server = http.createServer(async (req, res) => {

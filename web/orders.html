@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#245441">
+  <meta name="description" content="校园书集，面向校内学生的二手教材发布、交流与交易平台。">
+  <title>我的订单 · 校园书集</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="/style.css">
+  <!-- 模块脚本会等 HTML 解析完成后执行，共享页面逻辑由 data-page 指定。 -->
+  <script type="module" src="/app.js"></script>
+</head>
+<body data-page="orders">
+  <a class="skip-link" href="#app">跳到主要内容</a>
+  <div class="topbar"><div class="wrap topbar-inner"><span>一本书的下一章，也许从你开始。</span><span>校园教材 · 知识循环</span></div></div>
+  <header class="site-header">
+    <div class="wrap nav">
+      <a href="/index.html" class="brand" aria-label="校园书集首页"><span class="brand-icon" aria-hidden="true">书</span><span>校园书集<small>CAMPUS BOOKS</small></span></a>
+      <nav aria-label="主导航">
+        <a href="/index.html" data-nav="home">教材广场</a>
+        <a href="/mine.html" data-nav="mine">我的发布</a>
+        <a href="/orders.html" data-nav="orders">我的订单</a>
+      </nav>
+      <div id="account-nav"><a class="account-button" href="/login.html">登录 / 开始使用</a></div>
+    </div>
+  </header>
+  <main id="app" class="wrap" tabindex="-1" aria-busy="true"><div class="loading" role="status">正在打开校园书集…</div></main>
+  <footer class="site-footer"><div class="wrap footer-inner"><a href="/index.html" class="footer-brand">校园书集<span>让知识继续流转</span></a><p>教材在校园里流转，学习从这里继续。<br><span>校内交流 · 如实描述 · 友善沟通</span></p><a href="/guide.html">使用指南 ↗</a></div></footer>
+  <!-- 所有破坏性操作共用确认弹窗，取消和 Escape 均不会执行操作。 -->
+  <dialog id="confirm-dialog" aria-labelledby="confirm-title" aria-describedby="confirm-message">
+    <form method="dialog"><h2 id="confirm-title">确认操作</h2><p id="confirm-message"></p><div class="button-row"><button class="btn secondary" value="no" autofocus>取消</button><button class="btn" value="yes">确认</button></div></form>
+  </dialog>
+  <div id="toast" role="status" aria-live="polite" hidden></div>
+  <noscript><p class="notice-box wrap">请启用浏览器的 JavaScript 后使用校园书集。</p></noscript>
+</body>
+</html>

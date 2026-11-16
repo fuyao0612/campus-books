@@ -1,77 +1,108 @@
 # 校园书集前端
 
-这是校园二手教材交易系统的真实接口前端。页面不包含样例账号、浏览器假数据或模拟支付；所有业务数据都通过 Go API 获取和保存。前端已覆盖教材浏览、发布与管理、留言、订单和支付跳转。Go 服务还没有实现的接口会显示 HTTP 错误，前端不会假装操作成功。
+前端使用原生 HTML、CSS、JavaScript 和 Node.js 本地静态服务，无需 npm 安装或打包。保持绿色、纸张和书籍的既有视觉风格，适配桌面和手机。
+
+2026-11-16 已完成计划中的主要页面与交互。业务数据始终来自 Go API，页面中没有假账号、固定库存或模拟支付。订单、支付和删除留言的后端尚待实现；对应操作失败时会显示可读提示，不会伪造成功。
 
 ## 启动
 
-需要 Node.js 18+。在 `E:\campus-books` 项目根目录运行：
+在项目根目录分别打开两个终端：
 
 ```powershell
+cd E:\campus-books
 go run .
 ```
 
-另开终端运行前端：
-
 ```powershell
+cd E:\campus-books
 node web/server.mjs
 ```
 
-访问 **http://127.0.0.1:5174**。如果之前启动过旧版前端，先在旧终端按 Ctrl+C，再重新运行。不要双击 HTML 或使用 Live Server；本地 Node 服务会把 `/api/` 请求转发给 `http://127.0.0.1:8080`，无需给 Gin 添加 CORS。
+访问 <http://127.0.0.1:5174/login.html>。`/` 也是首页入口，未登录时跳转登录页。不要直接双击 HTML 或使用其他静态服务；本地服务会将 `/api/` 转发到 `http://127.0.0.1:8080`。
 
-端口被占用时可指定其他端口：
+前端端口可用 `$env:WEB_PORT = '5175'` 调整。修改 `server.mjs` 后需要重启 Node 服务，修改 HTML/CSS/JS 后刷新浏览器即可。
 
-```powershell
-$env:WEB_PORT = '5175'
-node web/server.mjs
-```
+## 页面
 
-## 当前可用的后端接口
+所有地址都有实际 HTML 文件，可以直接访问和刷新，符合课程 login.html、index.html、detail.html 的页面命名要求。
 
-项目现有服务已经支持：
-
-| 用途 | 方法与路径 | 请求/响应要点 |
-| --- | --- | --- |
-| 登录 | `POST /api/login` | 请求 `{name,password}`；响应 `data` 包含 `token` 和 `user` |
-| 当前用户 | `GET /api/me` | `Authorization: Bearer <token>` |
-| 教材广场 | `GET /api/books?keyword=` | 返回在售教材数组 |
-| 教材详情 | `GET /api/books/:id` | 现有实现仅返回在售教材 |
-| 发布教材 | `POST /api/books` | Bearer；价格为整数分；返回新教材 |
-
-登录使用数据库中已经创建的账号。当前没有注册页面。若后端未运行、账号验证失败或路由尚不存在，页面会展示可读的错误并提供重试。
-
-## 前后端接口约定
-
-前端 API 封装位于 `api.js`。以下接口是完整页面所需的 REST 契约；现有 Go 服务尚未实现的部分需要后续逐项添加。成功响应建议统一为 `{ "message": "...", "data": ... }`，失败响应使用合适的 HTTP 状态码和 `{ "message": "..." }`。
-
-| 功能 | 方法与路径 | 请求数据 / 返回数据 |
-| --- | --- | --- |
-| 查询本人发布 | `GET /api/me/books?status=on_sale` | 状态可省略或为 `on_sale`、`off_shelf`、`sold`；返回教材数组 |
-| 编辑本人教材 | `PUT /api/books/:id` | `{title,course,condition,price,description,contact}`；`price` 为整数分 |
-| 下架本人教材 | `PATCH /api/books/:id/status` | `{status:"off_shelf"}`；服务端检查所有权与未完成交易 |
-| 查询教材留言 | `GET /api/books/:id/comments` | 返回留言数组，字段含 `id,user_id,name,content,created_at` |
-| 发布留言 | `POST /api/books/:id/comments` | `{content}`；需要登录 |
-| 删除本人留言 | `DELETE /api/comments/:id` | 需要登录并由服务端校验留言归属 |
-| 创建订单 | `POST /api/orders` | `{book_id}`；服务端重新读取价格并确保同一教材不会并发卖给多人 |
-| 查询订单 | `GET /api/orders?role=buy&status=pending` | `role` 为 `buy` 或 `sell`，`status` 可省略；返回订单数组 |
-| 订单详情 | `GET /api/orders/:id` | 仅买家或卖家可查询 |
-| 取消待支付订单 | `POST /api/orders/:id/cancel` | 空 JSON `{}`；仅买家可取消待支付订单 |
-| 创建支付 | `POST /api/orders/:id/pay` | 空 JSON `{}`；返回 `{payment_url}`，由真实支付服务生成 |
-| 确认收货 | `POST /api/orders/:id/complete` | 空 JSON `{}`；仅买家可确认已支付订单 |
-
-教材结构使用现有 Go 字段：`id,title,course,condition,price,description,contact,seller_id,status,created_at,updated_at`。另外发布和编辑会提交 `category`（计算机、公共课、语言、设计、其他）；现有 Go 模型尚未保存这个字段，后续需要补充，缺省时页面按标题与课程推断分类。`price` 始终是整数分。订单至少需要 `id,number,book_id,title,price,buyer_id,seller_id,status,created_at`，建议同时返回 `seller_name,contact` 以展示交接信息。订单状态建议为 `pending,paid,completed,cancelled`；教材状态为 `on_sale,off_shelf,sold`。
-
-支付前端只负责请求创建支付并跳转到服务端返回的 `payment_url`。只有支付平台的服务端回调验证成功后，Go 后端才能把订单设为 `paid` 并把教材设为 `sold`。浏览器回跳不能作为付款成功依据。页面不保存银行卡信息，也不提供虚假的支付成功状态。
-
-## 页面与代码
-
-页面路由：`#/` 教材广场、`#/book/:id` 详情与留言、`#/publish` 发布、`#/edit/:id` 修改、`#/mine` 我的发布、`#/orders` 买入/卖出订单、`#/pay/:id` 支付、`#/profile` 个人中心、`#/guide` 使用指南。没有预约功能。
-
-| 文件 | 用途 |
+| 地址 | 页面与交互 |
 | --- | --- |
-| `index.html` | 页面外壳、导航、登录与确认弹窗 |
-| `style.css` | 桌面与移动端样式 |
-| `app.js` | 路由、页面渲染、表单校验与用户操作 |
-| `api.js` | JWT 会话和所有 Go API 请求 |
-| `server.mjs` | 本地静态服务与 `/api/` 代理 |
+| `/login.html` | 姓名与密码登录、密码显示/隐藏、失败提示、登录后跳转 |
+| `/index.html` | 书名/课程搜索、分类/成色筛选、价格排序、分页、重置筛选 |
+| `/detail.html?id=12` | 教材详情、发布人/联系方式、留言列表、发布/删除本人留言、购买确认 |
+| `/publish.html` | 发布教材、输入校验、元转整数分、文字封面预览 |
+| `/edit.html?id=12` | 编辑本人在售教材、清空描述、保存失败保留输入 |
+| `/mine.html` | 本人教材、在售/下架/售出筛选、编辑与下架确认、历史留言入口 |
+| `/comments.html?id=12` | 教材历史留言，只读；适用于已下架教材 |
+| `/orders.html` | 买入/卖出订单、状态筛选、去支付、取消、确认收货 |
+| `/order.html?id=1` | 订单详情、教材交易快照、金额/联系信息/时间、操作与状态刷新 |
+| `/payment.html?id=1` | 核对订单、请求支付地址、跳转付款 |
+| `/payment.html?id=1&return=1` | 付款返回后的状态查询；仍以服务端订单状态为准 |
+| `/profile.html` | 当前用户、业务入口、退出登录 |
+| `/guide.html` | 使用指南、常见问题，无需登录 |
 
-JWT 保存在 `sessionStorage`，关闭浏览器标签后清除；刷新时会调用 `/api/me` 校验。服务端仍须对每个写操作检查身份、资源归属、教材/订单状态和并发条件。图片上传、在线注册和正式支付渠道可以在后续功能迭代中增加。
+除登录页与使用指南外，前端页面要求先登录。后端目前仍允许匿名调用教材列表、详情与留言查询 API；页面守卫不能代替后端权限校验。旧版 `#/book/12` 等书签会迁移到对应 HTML 地址。
+
+登录凭据保存在 `sessionStorage`，每次页面加载通过 `/api/me` 恢复身份；401 清除凭据并跳转登录，网络故障保留凭据并允许重试。退出会清除前端凭据并返回登录页，目前没有服务端令牌撤销功能。
+
+## 已实现的后端接口
+
+| 方法 | 路径 | 说明 |
+| --- | --- | --- |
+| POST | `/api/login` | `{name,password}`；返回 `data.token` 和 `data.user` |
+| GET | `/api/me` | 当前用户，需要 Bearer Token |
+| GET | `/api/books?keyword=` | 在售教材数组，关键词匹配书名或课程 |
+| GET | `/api/books/:id` | 当前仅返回在售教材 |
+| POST | `/api/books` | 发布，需要登录；价格为整数分 |
+| GET | `/api/me/books?status=` | 本人教材，状态可省略或为 on_sale/off_shelf/sold |
+| PUT | `/api/books/:id` | 编辑本人在售教材，返回至少 `{id}` |
+| PATCH | `/api/books/:id/status` | `{status:"off_shelf"}`；本人下架 |
+| GET | `/api/books/:id/comments` | 教材留言，含姓名，教材下架后仍可查询 |
+| POST | `/api/books/:id/comments` | `{content}`；需要登录，最多500字符 |
+
+成功响应以 `{message,data}` 包装，失败响应以 `{message}` 说明。未实现路由返回的文本 404 也有友好提示。任何新增接口仍须在后端验证身份、归属与业务状态。
+
+## 待实现的后端接口约定
+
+以下均已接好前端调用，但不表示后端已经完成。
+
+| 方法 | 路径 | 请求与响应约定 |
+| --- | --- | --- |
+| DELETE | `/api/comments/:id` | 只允许本人删除，成功返回 200/204 |
+| POST | `/api/orders` | 请求 `{book_id}`；服务端读取价格、校验归属及状态并防重复售出；返回至少 `{id}` |
+| GET | `/api/orders?role=buy&status=pending` | role=buy/sell，status 可省略；只返回当前用户相关订单数组 |
+| GET | `/api/orders/:id` | 仅交易相关方可读，返回订单对象 |
+| POST | `/api/orders/:id/cancel` | `{}`；仅买家取消待支付订单 |
+| POST | `/api/orders/:id/complete` | `{}`；仅买家确认已支付订单 |
+| POST | `/api/orders/:id/pay` | `{}`；仅买家发起待支付订单付款，返回 `{payment_url}` |
+
+订单对象约定：`id,number,book_id,title,price,buyer_id,seller_id,status,created_at`；补充 `seller_name,buyer_name,contact,paid_at` 可以完整展示交易信息。`price` 是订单快照金额，单位为分；不应随教材后续编辑改变。状态为 `pending,paid,completed,cancelled`。
+
+支付地址应由服务端创建，前端仅接受 HTTP(S) URL。付款返回地址建议为 `/payment.html?id=订单编号&return=1`。即使 URL 中包含 success 等参数，前端也不会据此更新订单。只有服务端核验支付结果后，订单接口返回 paid/completed，页面才展示付款已确认。支付渠道、回调地址及并发交易规则将在后端教学中实现。
+
+## 数据兼容说明
+
+- 教材沿用现有字段 `id,title,course,condition,price,description,contact,seller_id,status,created_at,updated_at`。
+- 预留 `seller_name` 展示姓名；当前后端没有返回时显示“校园同学 #编号”，不会伪造姓名。
+- 发布/编辑表单提交 `category`，当前 Go 模型尚未持久化它。缺失时页面按书名和课程推断，不能保证人工选择的分类被保存；后端需补字段。
+- 留言列表返回 `id,book_id,user_id,name,content,created_at`；发布响应可直接使用现有 Comment 模型，成功后前端重新查询姓名。
+- 价格输入先拆分元与小数，再转换整数分，避免浮点乘法误差。
+- 列表分页、分类/成色筛选和排序目前在浏览器完成；数据库分页尚待后端设计。
+- 不包含预约、物流、退款、在线注册、图片上传和管理员后台。图片为根据书名生成的文字示意。
+
+## 文件组织与维护
+
+- 各 HTML 文件：独立页面外壳，以 `body[data-page]` 选择页面。
+- `app.js`：带中文注释的页面渲染、表单校验、登录守卫和交互。
+- `api.js`：统一请求、超时、响应解析、错误状态及凭据管理。
+- `style.css`：展开后的现有样式，以及登录、订单和响应式补充样式。
+- `server.mjs`：固定白名单的静态服务与 API 代理。
+
+页面没有内置业务样例数据。后续增加页面时，需要同时增加 HTML 文件、app.js 页面函数和 server.mjs 静态文件白名单。
+
+## 本次验证与边界
+
+使用真实浏览器加载真实前端，浏览器内隔离的 API 响应用于检查：登录失败/成功、密码显隐、分页和课程搜索、留言转义/发布/删除、编辑金额与清空描述、下架和历史留言、订单创建与支付返回、取消与确认收货、未实现接口的文本404提示、保存失败保留输入、手机布局以及退出登录。
+
+这些验证建立的是前端在给定接口响应下的行为；没有写入项目数据库，也没有证明真实支付、订单事务或越权校验已经由后端实现。仍需与现有 Go 服务和后续订单/支付接口实际联调。
