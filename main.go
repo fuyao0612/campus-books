@@ -101,6 +101,13 @@ func main() {
 		bookHandler.Create,
 	)
 
+	// 修改教材：先验证登录身份，再由 Update 检查教材归属和在售状态。
+	router.PUT(
+		"/api/books/:id",
+		authHandler.RequireAuth(),
+		bookHandler.Update,
+	)
+
 	// 留言查询：无需登录，按路径参数 id 查询指定教材的留言。
 	router.GET("/api/books/:id/comments", commentHandler.List)
 

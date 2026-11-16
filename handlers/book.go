@@ -242,3 +242,145 @@ func (h *BookHandler) Mine(c *gin.Context) {
 		"data":    books,
 	})
 }
+
+//修改当前用户发布的在售教材
+func (h *BookHandler)Update(c *gin.Context){
+	// 从认证中间件保存的上下文中读取用户编号。
+	value, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"message": "请先登录",
+		})
+		return
+	}
+
+	// 确认用户编号类型正确且大于零。
+	userID, ok := value.(int64)
+	if !ok || userID <= 0 {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"message": "登录信息无效，请重新登录",
+		})
+		return
+	}
+
+	// 将路径中的教材编号转换为十进制 int64。
+	bookID, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil || bookID <= 0 {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"message": "教材编号必须是正整数",
+		})
+		return
+	}
+
+	// 按编号查询教材，暂时不限制状态，方便分别判断归属和状态。
+	var book models.Book
+	result := h.DB.First(&book, bookID)
+
+	// 教材不存在时返回 404。
+	if errors.Is(result.Error, gorm.ErrRecordNotFound) {
+		c.JSON(http.StatusNotFound, gin.H{
+			"message": "教材不存在",
+		})
+		return
+	}
+
+	// 其他数据库错误返回 500，并在终端记录具体原因。
+	if result.Error != nil {
+		log.Printf("查询待修改教材失败：%v", result.Error)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"message": "修改教材失败，请稍后重试",
+		})
+		return
+	}
+
+	// 身份验证只能确认“你是谁”；这里还要判断“教材是否属于你”。
+	if book.SellerID != userID {
+		c.JSON(http.StatusForbidden, gin.H{
+			"message": "不能修改其他用户发布的教材",
+		})
+		return
+	}
+
+	// 已下架或已售出的教材不能通过这个接口修改。
+	if book.Status != "on_sale" {
+		c.JSON(http.StatusConflict, gin.H{
+			"message": "只能修改在售教材",
+		})
+		return
+	}
+
+	// 编辑和发布暂时采用相同的字段及校验规则。
+	var request CreateBookRequest
+	if err := c.ShouldBindJSON(&request); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"message": "请检查必填信息、字段长度和价格，价格必须为正整数，单位为分",
+		})
+		return
+	}
+
+	// 清理文本两端空白，避免保存无意义的空格。
+	request.Title = strings.TrimSpace(request.Title)
+	request.Course = strings.TrimSpace(request.Course)
+	request.Condition = strings.TrimSpace(request.Condition)
+	request.Description = strings.TrimSpace(request.Description)
+	request.Contact = strings.TrimSpace(request.Contact)
+
+	// required 无法排除纯空格文本，因此清理后再次检查必填项。
+	if request.Title == "" ||
+		request.Course == "" ||
+		request.Condition == "" ||
+		request.Contact == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"message": "教材名称、适用课程、成色和联系方式不能为空",
+		})
+		return
+	}
+
+	// 显式列出允许更新的数据库列，避免意外修改发布人和状态。
+	// 使用 map 更新时，description 的空字符串也会被写入数据库。
+	updates := map[string]interface{}{
+		"title":       request.Title,
+		"course":      request.Course,
+		"condition":   request.Condition,
+		"price":       request.Price,
+		"description": request.Description,
+		"contact":     request.Contact,
+	}
+
+	// Model 指定更新教材表。
+	// 更新时再次限制编号、发布人和状态，避免查询后状态变化仍被修改。
+	// Updates 执行更新，并按 GORM 约定维护 UpdatedAt 时间。
+	result = h.DB.Model(&models.Book{}).
+		Where(
+			"id = ? AND seller_id = ? AND status = ?",
+			bookID,
+			userID,
+			"on_sale",
+		).
+		Updates(updates)
+
+	// SQL 执行失败时返回服务器错误。
+	if result.Error != nil {
+		log.Printf("更新教材失败：%v", result.Error)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"message": "修改教材失败，请稍后重试",
+		})
+		return
+	}
+
+	// 没有记录满足更新条件，可能是教材已被下架或删除。
+	if result.RowsAffected == 0 {
+		c.JSON(http.StatusConflict, gin.H{
+			"message": "教材状态已变化，请刷新后重试",
+		})
+		return
+	}
+
+	// 返回教材编号，前端可据此跳转到详情页并重新读取最新信息。
+	c.JSON(http.StatusOK, gin.H{
+		"message": "修改成功",
+		"data": gin.H{
+			"id": bookID,
+		},
+	})
+}
