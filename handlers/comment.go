@@ -196,3 +196,105 @@ func (h *CommentHandler) Create(c *gin.Context) {
 	})
 
 }
+
+// Delete 删除当前用户自己发表的留言。
+// 教材发布人也不能删除其他用户的留言。
+func (h *CommentHandler) Delete(c *gin.Context) {
+	// 从认证中间件保存的请求上下文中，取得当前用户编号。
+	value, exists := c.Get("user_id")
+
+	// 缺少用户编号时，无法确认操作者身份。
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"message": "请先登录",
+		})
+		return // 结束处理，避免继续执行删除。
+	}
+
+	// 类型断言：确认保存的用户编号是 int64。
+	userID, ok := value.(int64)
+
+	// 用户编号还必须大于零。
+	if !ok || userID <= 0 {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"message": "登录信息无效，请重新登录",
+		})
+		return
+	}
+
+	// 读取路径中的留言编号，并按十进制转换为 int64。
+	// 例如 /api/comments/8 中，id 参数为字符串 "8"。
+	commentID, err := strconv.ParseInt(c.Param("id"), 10, 64)
+
+	// 不能转换为整数，或者编号不是正数时，返回 400。
+	if err != nil || commentID <= 0 {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"message": "留言编号必须是正整数",
+		})
+		return
+	}
+
+	// 声明留言结构体变量，用来接收查询结果。
+	var comment models.Comment
+
+	// 根据主键编号查询留言。
+	result := h.DB.First(&comment, commentID)
+
+	// 区分“留言不存在”和其他数据库故障。
+	if errors.Is(result.Error, gorm.ErrRecordNotFound) {
+		c.JSON(http.StatusNotFound, gin.H{
+			"message": "留言不存在或已删除",
+		})
+		return
+	}
+
+	// 数据库查询失败时，记录具体错误并返回 500。
+	if result.Error != nil {
+		log.Printf("查询待删除留言失败：%v", result.Error)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"message": "删除留言失败，请稍后重试",
+		})
+		return
+	}
+
+	// 留言作者必须是当前用户。
+	// 仅检查前端是否显示删除按钮不够，后端必须再次校验。
+	if comment.UserID != userID {
+		c.JSON(http.StatusForbidden, gin.H{
+			"message": "不能删除其他用户的留言",
+		})
+		return
+	}
+
+	// 执行删除时再次限制留言编号和作者编号。
+	// 即使通过其他工具直接调用接口，也不能绕过归属条件。
+	result = h.DB.
+		Where("id = ? AND user_id = ?", commentID, userID).
+		Delete(&models.Comment{})
+
+	// 数据库删除失败时返回 500。
+	if result.Error != nil {
+		log.Printf("删除留言失败：%v", result.Error)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"message": "删除留言失败，请稍后重试",
+		})
+		return
+	}
+
+	// 查询后，留言可能已经被另一个请求删除。
+	// RowsAffected 为零表示本次没有删除任何记录。
+	if result.RowsAffected == 0 {
+		c.JSON(http.StatusNotFound, gin.H{
+			"message": "留言不存在或已删除",
+		})
+		return
+	}
+
+	// 删除成功，返回被删除的留言编号。
+	c.JSON(http.StatusOK, gin.H{
+		"message": "留言已删除",
+		"data": gin.H{
+			"id": commentID,
+		},
+	})
+}

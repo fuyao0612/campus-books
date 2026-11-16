@@ -125,6 +125,13 @@ func main() {
 		commentHandler.Create,
 	)
 
+	// 删除留言：先验证登录身份，再由 Delete 校验留言归属。
+	router.DELETE(
+		"/api/comments/:id",       // id 是留言编号。
+		authHandler.RequireAuth(), // 验证 JWT，并在上下文保存 user_id。
+		commentHandler.Delete,     // 检查作者身份，然后删除留言。
+	)
+
 	// 完成处理器初始化和路由登记后，监听 8080 端口并开始接收 HTTP 请求。
 	if err := router.Run(":8080"); err != nil {
 		log.Fatalf("服务启动失败：%v", err)
