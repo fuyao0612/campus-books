@@ -37,7 +37,7 @@ ALIPAY_NOTIFY_URL=https://你的实际公网域名/api/payments/alipay/notify
 & 'C:\Program Files (x86)\cloudflared\cloudflared.exe' tunnel --url http://127.0.0.1:8080
 ```
 
-隧道重启后可能换域名；更新 `.env` 并重启后端，旧链接中的回调地址不会自动改变。浏览器返回地址访问的是前端 5174，支付宝通知访问的是后端 8080，不能混淆。
+隧道重启后可能换域名；更新 `.env` 后，本机模式重新启动Go服务；Docker模式执行 `docker compose up -d --force-recreate --wait backend` 重新创建容器（仅restart不会更新环境变量）。旧链接中的回调地址不会自动改变。浏览器返回地址访问的是前端 5174，支付宝通知访问的是后端 8080，不能混淆。
 
 ## 接口
 
