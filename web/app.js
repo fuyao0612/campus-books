@@ -6,7 +6,7 @@ const params = new URLSearchParams(location.search);
 const pageName = document.body.dataset.page || 'home';
 const app = $('app');
 const names = {
-  on_sale: '在售', off_shelf: '已下架', sold: '已售出',
+  on_sale: '在售', reserved: '交易中', off_shelf: '已下架', sold: '已售出',
   pending: '待支付', paid: '待交接', completed: '已完成', cancelled: '已取消',
 };
 const categories = ['全部', '计算机', '公共课', '语言', '设计', '其他'];
@@ -168,7 +168,7 @@ async function editor() {
 async function mine() {
   let books = [], failure = null;
   try { books = array(await api.mine(mineTab === 'all' ? '' : mineTab)); } catch (error) { failure = error; }
-  return heading('我发布的教材', '整理书架，管理每一本教材的下一章。') + `<div class="tabs">${[['all', '全部'], ['on_sale', '在售'], ['off_shelf', '已下架'], ['sold', '已售出']].map(([value, label]) => `<button class="chip ${value === mineTab ? 'active' : ''}" data-action="mine-tab" data-value="${value}">${label}</button>`).join('')}<a href="${link('publish')}" class="text-link push-right">＋ 发布教材</a></div>${failure ? errorBox(failure) : books.length ? books.map(book => `<article class="management-card"><div class="management-row">${cover(book, 'mini-cover')}<div class="management-main">${status(book.status)}<h2 class="item-title">${esc(book.title)}</h2><p>${esc(book.course)} · ${esc(book.condition)}</p>${price(book.price)}</div><div class="button-row">${book.status === 'on_sale' ? `<a class="btn secondary" href="${link('book', book.id)}">查看</a><a class="btn secondary" href="${link('edit', book.id)}">编辑</a><button class="btn danger" data-action="remove" data-id="${esc(book.id)}">下架</button>` : `<a class="text-link" href="${link('comments', book.id)}">历史留言 →</a>`}</div></div></article>`).join('') : empty('这里暂时没有教材', '发布一本教材，让闲置的知识继续流转。', link('publish'), '发布教材')}`;
+  return heading('我发布的教材', '整理书架，管理每一本教材的下一章。') + `<div class="tabs">${[['all', '全部'], ['on_sale', '在售'], ['reserved', '交易中'], ['off_shelf', '已下架'], ['sold', '已售出']].map(([value, label]) => `<button class="chip ${value === mineTab ? 'active' : ''}" data-action="mine-tab" data-value="${value}">${label}</button>`).join('')}<a href="${link('publish')}" class="text-link push-right">＋ 发布教材</a></div>${failure ? errorBox(failure) : books.length ? books.map(book => `<article class="management-card"><div class="management-row">${cover(book, 'mini-cover')}<div class="management-main">${status(book.status)}<h2 class="item-title">${esc(book.title)}</h2><p>${esc(book.course)} · ${esc(book.condition)}</p>${price(book.price)}</div><div class="button-row">${book.status === 'on_sale' ? `<a class="btn secondary" href="${link('book', book.id)}">查看</a><a class="btn secondary" href="${link('edit', book.id)}">编辑</a><button class="btn danger" data-action="remove" data-id="${esc(book.id)}">下架</button>` : `<a class="text-link" href="${link('comments', book.id)}">历史留言 →</a>`}</div></div></article>`).join('') : empty('这里暂时没有教材', '发布一本教材，让闲置的知识继续流转。', link('publish'), '发布教材')}`;
 }
 
 // 订单金额和交易快照完全以服务端为准，浏览器不会重新计算应付金额。

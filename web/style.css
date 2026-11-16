@@ -1134,3 +1134,6 @@ main { padding-top: 26px; }
 
 /* 书名中的显式换行用于登录页插画。 */
 .login-books .book-cover strong { white-space: pre-line; }
+
+/* 交易中的教材已被订单占用，与在售状态区分展示。 */
+.status.reserved { background: #fbf0dc; color: #876218; }

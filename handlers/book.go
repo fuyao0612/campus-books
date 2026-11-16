@@ -182,7 +182,6 @@ func (h *BookHandler) Create(c *gin.Context) {
 	request.Condition = strings.TrimSpace(request.Condition)
 	request.Description = strings.TrimSpace(request.Description)
 	request.Contact = strings.TrimSpace(request.Contact)
-	request.Contact = strings.TrimSpace(request.Contact)
 	// 未提交分类时统一归为“其他”，避免编辑时保存空分类。
 	if request.Category == "" {
 		request.Category = "其他"
@@ -251,12 +250,14 @@ func (h *BookHandler) Mine(c *gin.Context) {
 
 	//读取查询参数
 	status := strings.TrimSpace(c.Query("status"))
+	// 允许查询在售、交易中、下架和售出状态。
 	if status != "" &&
 		status != "on_sale" &&
+		status != "reserved" &&
 		status != "off_shelf" &&
 		status != "sold" {
 		c.JSON(http.StatusBadRequest, gin.H{
-			"message": "教材状态只能为 on_sale、off_shelf 或 sold",
+			"message": "教材状态只能为 on_sale、reserved、off_shelf 或 sold",
 		})
 		return
 	}

@@ -71,6 +71,9 @@ func main() {
 	// 创建留言处理器，将已连接的数据库对象交给留言接口使用。
 	commentHandler := &handlers.CommentHandler{DB: db}
 
+	// 创建订单处理器，后续下单和订单查询都使用同一个数据库对象。
+	orderHandler := &handlers.OrderHandler{DB: db}
+
 	// 服务检查：无需登录，只返回服务运行提示，不实时检查数据库连接。
 	router.GET("/api/health", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{
@@ -131,6 +134,13 @@ func main() {
 		"/api/comments/:id",       // id 是留言编号。
 		authHandler.RequireAuth(), // 验证 JWT，并在上下文保存 user_id。
 		commentHandler.Delete,     // 检查作者身份，然后删除留言。
+	)
+
+	// 创建订单：先验证身份，再由 Create 占用教材并保存订单。
+	router.POST(
+		"/api/orders",
+		authHandler.RequireAuth(),
+		orderHandler.Create,
 	)
 
 	// 完成处理器初始化和路由登记后，监听 8080 端口并开始接收 HTTP 请求。
