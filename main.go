@@ -143,6 +143,27 @@ func main() {
 		orderHandler.Create,
 	)
 
+	// 查询当前用户买入或卖出的订单，需要登录。
+	router.GET(
+		"/api/orders",
+		authHandler.RequireAuth(),
+		orderHandler.List,
+	)
+
+	// 查询指定订单，处理函数进一步检查买卖双方身份。
+	router.GET(
+		"/api/orders/:id",
+		authHandler.RequireAuth(),
+		orderHandler.Detail,
+	)
+
+	// 取消订单：验证身份后，由 Cancel 检查买家归属并执行事务。
+	router.POST(
+		"/api/orders/:id/cancel",
+		authHandler.RequireAuth(),
+		orderHandler.Cancel,
+	)
+
 	// 完成处理器初始化和路由登记后，监听 8080 端口并开始接收 HTTP 请求。
 	if err := router.Run(":8080"); err != nil {
 		log.Fatalf("服务启动失败：%v", err)
