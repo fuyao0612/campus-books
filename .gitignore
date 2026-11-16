@@ -16,3 +16,15 @@
 
 # 本机支付配置文件，不提交到仓库。
 /secrets/
+
+# 编辑器与本机工具配置。
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+.playwright-cli/
+# 执行测试生成的证据和数据库备份不提交。
+work/
+backups/
+*.bak
+coverage.out

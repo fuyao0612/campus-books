@@ -1,0 +1,78 @@
+# Compose读取项目根目录.env；本机SQL Server继续保留原有数据。
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: campus-books-backend:dev
+    init: true
+    environment:
+      DB_DSN: "${DOCKER_DB_DSN:?请先运行 scripts/Prepare-Docker.ps1}"
+      JWT_SECRET: "${JWT_SECRET:?请配置JWT_SECRET}"
+      ALIPAY_SANDBOX: "true"
+      ALIPAY_APP_ID: "${ALIPAY_APP_ID:?请配置沙箱APPID}"
+      ALIPAY_SELLER_ID: "${ALIPAY_SELLER_ID:?请配置沙箱商家ID}"
+      ALIPAY_APP_PRIVATE_KEY_FILE: /app/secrets/alipay-app-private.pem
+      ALIPAY_PUBLIC_KEY_FILE: /app/secrets/alipay-public.pem
+      ALIPAY_RETURN_BASE_URL: "${ALIPAY_RETURN_BASE_URL:-http://127.0.0.1:5174/payment.html}"
+      ALIPAY_NOTIFY_URL: "${ALIPAY_NOTIFY_URL:-}"
+      GIN_MODE: release
+    volumes:
+      - type: bind
+        source: ./secrets
+        target: /app/secrets
+        read_only: true
+        bind:
+          create_host_path: false
+    ports:
+      - "127.0.0.1:${BACKEND_PORT:-8080}:8080"
+    healthcheck:
+      test: ["CMD", "/app/campus-books", "healthcheck"]
+      interval: 15s
+      timeout: 5s
+      start_period: 30s
+      retries: 5
+    restart: unless-stopped
+    stop_grace_period: 15s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # 仅在明确执行初始化命令时运行，不随网站启动，也不写入默认账号。
+  seeduser:
+    profiles: ["tools"]
+    image: campus-books-backend:dev
+    entrypoint: ["/app/seeduser"]
+    environment:
+      DB_DSN: "${DOCKER_DB_DSN:?请先运行 scripts/Prepare-Docker.ps1}"
+      SEED_USER_NAME: "${SEED_USER_NAME:-}"
+      SEED_USER_PASSWORD: "${SEED_USER_PASSWORD:-}"
+
+  web:
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+    image: campus-books-web:dev
+    init: true
+    environment:
+      WEB_PORT: "5174"
+      BACKEND_URL: http://backend:8080
+    ports:
+      - "127.0.0.1:${FRONTEND_PORT:-5174}:5174"
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:5174/login.html').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+    restart: unless-stopped
+    stop_grace_period: 15s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

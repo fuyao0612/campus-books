@@ -1,0 +1,17 @@
+.env
+.env.*
+!.env.example
+secrets/
+.git/
+.github/
+*.log
+*.exe
+*.test
+bin/
+dist/
+node_modules/
+web/node_modules/
+docs/
+work/
+outputs/
+.playwright-cli/

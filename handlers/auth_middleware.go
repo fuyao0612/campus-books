@@ -1,6 +1,8 @@
 package handlers
 
 import (
+	"campus-books/models"
+	"log"
 	"net/http"
 	"strings"
 
@@ -51,6 +53,17 @@ func (h *AuthHandler) RequireAuth() gin.HandlerFunc {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
 				"message": "令牌中的用户信息无效",
 			})
+			return
+		}
+		// 令牌未过期不代表账号仍存在，避免已删除账号继续写入数据。
+		var count int64
+		if err := h.DB.WithContext(c.Request.Context()).Model(&models.User{}).Where("id = ?", claims.UserID).Count(&count).Error; err != nil {
+			log.Printf("检查登录账号失败：%v", err)
+			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"message": "暂时无法验证登录，请稍后重试"})
+			return
+		}
+		if count != 1 {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"message": "账号不存在，请重新登录"})
 			return
 		}
 

@@ -77,7 +77,7 @@ func (h *CommentHandler) List(c *gin.Context) {
 		Select("c.id,c.book_id,c.user_id,u.name,c.content,c.created_at").
 		Joins("Join users AS u ON u.id=c.user_id").
 		Where("c.book_id=?", bookID).
-		Order("c.created_at DESC").
+		Order("c.created_at DESC, c.id DESC").
 		Scan(&comments)
 
 	// 检查留言查询是否出现数据库错误。

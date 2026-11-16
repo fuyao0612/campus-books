@@ -21,8 +21,8 @@ type AuthHandler struct {
 
 // 前端发来的登录数据
 type LoginRequest struct {
-	Name     string `json:"name" binding:"required"`
-	Password string `json:"password" binding:"required"`
+	Name     string `json:"name" binding:"required,max=50"`
+	Password string `json:"password" binding:"required,max=72"`
 }
 
 // JWT中保存用户信息和有效期

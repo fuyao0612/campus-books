@@ -13,7 +13,9 @@ import (
 func main() {
 	//把.env中的配置读入环境变量
 	if err := godotenv.Load(); err != nil {
-		log.Fatal("读取.env失败")
+		if !os.IsNotExist(err) {
+			log.Fatal("读取.env失败")
+		}
 	}
 
 	dsn := os.Getenv("DB_DSN")
@@ -35,6 +37,10 @@ func main() {
 		log.Fatalf("获取数据库连接池失败:%v", err)
 	}
 	defer sqlDB.Close()
+	// 独立初始化命令也能准备用户表，容器无需复制.env文件。
+	if err := db.AutoMigrate(&models.User{}); err != nil {
+		log.Fatal("用户表初始化失败")
+	}
 
 	var sameNameUsers []models.User
 	if err := db.Where("name=?", name).Find(&sameNameUsers).Error; err != nil {

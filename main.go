@@ -1,9 +1,13 @@
 package main
 
 import (
+	"context"
 	"log"
 	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
+	"time"
 
 	"campus-books/models"
 
@@ -19,8 +23,23 @@ import (
 )
 
 func main() {
+	// 镜像健康检查使用同一个二进制，不依赖curl，也不重新迁移数据库。
+	if len(os.Args) == 2 && os.Args[1] == "healthcheck" {
+		client := &http.Client{Timeout: 3 * time.Second}
+		response, err := client.Get("http://127.0.0.1:8080/api/ready")
+		if err != nil {
+			os.Exit(1)
+		}
+		defer response.Body.Close()
+		if response.StatusCode != http.StatusOK {
+			os.Exit(1)
+		}
+		return
+	}
 	if err := godotenv.Load(); err != nil {
-		log.Println("未找到 .env 文件")
+		if !os.IsNotExist(err) {
+			log.Fatalf("读取配置失败：%v", err)
+		}
 	}
 
 	// 读取支付配置。
@@ -123,6 +142,16 @@ func main() {
 			"message": "后端服务运行正常",
 		})
 	})
+	// 就绪探针实际检查数据库连接，Compose据此等待后端准备完成。
+	router.GET("/api/ready", func(c *gin.Context) {
+		ctx, cancel := context.WithTimeout(c.Request.Context(), time.Second)
+		defer cancel()
+		if err := sqlDB.PingContext(ctx); err != nil {
+			c.JSON(http.StatusServiceUnavailable, gin.H{"message": "数据库暂不可用"})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"message": "服务已就绪"})
+	})
 
 	// 用户认证：登录无需令牌，成功后返回 JWT。
 	router.POST("/api/login", authHandler.Login)
@@ -219,7 +248,23 @@ func main() {
 	)
 
 	// 完成处理器初始化和路由登记后，监听 8080 端口并开始接收 HTTP 请求。
-	if err := router.Run(":8080"); err != nil {
+	server := &http.Server{Addr: ":8080", Handler: router, ReadHeaderTimeout: 5 * time.Second, IdleTimeout: 60 * time.Second}
+	stop, done := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer done()
+	shutdownDone := make(chan struct{})
+	go func() {
+		defer close(shutdownDone)
+		<-stop.Done()
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		if err := server.Shutdown(ctx); err != nil {
+			log.Printf("服务停止超时：%v", err)
+		}
+	}()
+	log.Println("HTTP服务监听 :8080")
+	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		log.Fatalf("服务启动失败：%v", err)
 	}
+	// 等待已接收的请求处理完成，再执行数据库连接池的defer关闭。
+	<-shutdownDone
 }

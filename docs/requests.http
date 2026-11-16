@@ -1,0 +1,59 @@
+### 用自己的账号填写变量，不要提交真实密码或token。
+@base = http://127.0.0.1:8080
+@token = 替换为登录响应中的token
+@book = 1
+@order = 1
+
+### 进程与数据库就绪
+GET {{base}}/api/ready
+
+### 登录
+POST {{base}}/api/login
+Content-Type: application/json
+
+{"name":"你的姓名","password":"你的学号"}
+
+### 书名或课程搜索
+GET {{base}}/api/books?keyword=Go
+
+### 发布教材，价格单位分
+POST {{base}}/api/books
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{"title":"Go程序设计","course":"程序设计","category":"计算机","condition":"九成新","price":1999,"description":"少量笔记","contact":"测试联系方式"}
+
+### 下单
+POST {{base}}/api/orders
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{"book_id":{{book}}}
+
+### 付款地址
+POST {{base}}/api/orders/{{order}}/pay
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{}
+
+### 主动查单
+POST {{base}}/api/orders/{{order}}/sync
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{}
+
+### 取消
+POST {{base}}/api/orders/{{order}}/cancel
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{}
+
+### 确认收货
+POST {{base}}/api/orders/{{order}}/complete
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{}

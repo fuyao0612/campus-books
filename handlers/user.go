@@ -10,7 +10,7 @@ import (
 	"gorm.io/gorm"
 )
 
-//返回当前用户信息
+// 返回当前用户信息
 func (h *AuthHandler) Me(c *gin.Context) {
 	//从认证中间件保存的上下文中取得用户编号
 	value, exists := c.Get("user_id")
